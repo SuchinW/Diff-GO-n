@@ -32,7 +32,7 @@ SNR_DICT = {100: 0.0,
             10: 0.36,
             5: 0.6,
             1: 0.9}
-device = "cuda:2"
+device = "cuda"
 
 class TrainLoop:
     def __init__(

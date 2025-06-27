@@ -34,6 +34,7 @@ After installing PyTorch, install the remaining dependencies:
 
 ```bash
 pip install -r requirements.txt
+pip install torch==1.13.0+cu117 torchvision==0.14.0+cu117 torchaudio==0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
 ```
 
 ---
@@ -99,7 +100,7 @@ This script will execute the sampling process on the SLURM cluster, generating o
 Alternatively, you can run the sampling script directly without SLURM using the following command:
 
 ```bash
-python image_sample_noise_exp.py --data_dir "path/to/dataset_folder" \
+python image_sample.py --data_dir "path/to/dataset_folder" \
                                   --dataset_mode cityscapes \
                                   --attention_resolutions 32,16,8 \
                                   --diffusion_steps 1000 \

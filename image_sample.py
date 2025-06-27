@@ -6,29 +6,22 @@ numpy array. This can be used to produce samples for FID evaluation.
 import argparse
 import os
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch as th
-import torch.distributed as dist
 import torchvision as tv
+import torchvision.transforms as T
+from PIL import ImageFilter
 
 import guided_diffusion.gaussian_diffusion as gd
 from guided_diffusion.image_datasets import load_data
-
-# from guided_diffusion import dist_util, logger
 from guided_diffusion.script_util import (
     model_and_diffusion_defaults,
     create_model_and_diffusion,
     add_dict_to_argparser,
     args_to_dict,
 )
-
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-from scipy import ndimage, signal
 from pooling import MedianPool2d
-from PIL import Image, ImageFilter
-import torchvision.utils as vutils
-import torchvision.transforms as T
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -43,8 +36,9 @@ SNR_DICT = {100: 0.0,
 
 noise_bag_size = 1000
 th.manual_seed(150)
-noise_bag = th.randn(noise_bag_size, 3, 256, 256)
+noise_bag = th.randn(noise_bag_size, 3, 256, 512)
 th.manual_seed(np.random.randint(0, 1000000))
+
 
 def main():
     args = create_argparser().parse_args()
@@ -54,7 +48,7 @@ def main():
     model, diffusion = create_model_and_diffusion(
         **args_to_dict(args, model_and_diffusion_defaults().keys())
     )
-    device = "cuda:3"
+    device = "cuda"
     model.to(device)
     model.load_state_dict(th.load(args.model_path))
     model.to(device)
@@ -101,9 +95,9 @@ def main():
         plot_label2 = cond['label_ori'][0].cpu().numpy()
         plot_label2 = plot_label2
 
-
         # model_kwargs = preprocess_input(args, cond, num_classes=args.num_classes, one_hot_label=args.one_hot_label, pool=None)
-        model_kwargs = preprocess_input_FDS(args, cond, num_classes=args.num_classes, one_hot_label=args.one_hot_label,image=image)
+        model_kwargs = preprocess_input_FDS(args, cond, num_classes=args.num_classes, one_hot_label=args.one_hot_label,
+                                            image=image)
         # model_kwargs, cond = preprocess_input(cond, one_hot_label=args.one_hot_label, add_noise=args.add_noise, noise_to=args.noise_to)
 
         # set hyperparameter
@@ -112,7 +106,6 @@ def main():
         sample_fn = (
             diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
         )
-
 
         noise_schedule = "linear"
 
@@ -129,18 +122,18 @@ def main():
             rescale_timesteps=False
         )
 
-        #Sampling starts from the forward diffusion process
+        # Sampling starts from the forward diffusion process
         # t = th.tensor([step - 1] * batch_size, device=device)
         # noisy_input = GD.q_sample(batch.to(device), t)
 
-        #Sampling starts from random noise from the noise bag
+        # Sampling starts from random noise from the noise bag
         random_index = th.randint(0, noise_bag_size, (1,)).item()
         noise = noise_bag[random_index].unsqueeze(0).to(device)
 
         sample = sample_fn(
             model,
             (args.batch_size, 3, image.shape[2], image.shape[3]),
-            noise=noise, #noise=noisy_input,
+            noise=noise,  # noise=noisy_input,
             clip_denoised=args.clip_denoised,
             model_kwargs=model_kwargs,
             progress=True
@@ -153,11 +146,11 @@ def main():
         path = cond['path'][0].split('\\')[-1].split('.')[0] + '.png'
 
         s = path.split("/")[-1]
-        tv.utils.save_image(image[0], os.path.join(image_path, 'rec_'+s))
-        tv.utils.save_image(label[0], os.path.join(label_path, 'rec_'+s))
+        tv.utils.save_image(image[0], os.path.join(image_path, 'rec_' + s))
+        tv.utils.save_image(label[0], os.path.join(label_path, 'rec_' + s))
         for j in range(sample.shape[0]):
             tv.utils.save_image(sample[j],
-                                os.path.join(sample_path, "n_step_" + str(step) + "_" + "r_step_1000_" + 'rec_'+s))
+                                os.path.join(sample_path, "n_step_" + str(step) + "_" + "r_step_1000_" + 'rec_' + s))
         print(f"created {len(all_samples) * args.batch_size} samples for the same input image")
 
     print("sampling complete")
@@ -228,7 +221,7 @@ def preprocess_input_FDS(args, data, num_classes, one_hot_label=True, image=None
     map_to_be_discarded = []
     map_to_be_preserved = []
     input_semantics = input_semantics.squeeze(0)
-    
+
     for idx, segmap in enumerate(input_semantics.squeeze(0)):
         if 1 in segmap:
             map_to_be_preserved.append(idx)
@@ -248,7 +241,6 @@ def preprocess_input_FDS(args, data, num_classes, one_hot_label=True, image=None
 
     print(input_semantics.shape, len(map_to_be_preserved))
 
-    # input_semantics = input_semantics[map_to_be_preserved].unsqueeze(0)
     input_semantics = input_semantics[0][map_to_be_preserved]
     noise = th.randn(input_semantics.shape, device=input_semantics.device) * SNR_DICT[args.snr]
 
@@ -261,7 +253,6 @@ def preprocess_input_FDS(args, data, num_classes, one_hot_label=True, image=None
     elif pool == "mean":
         print("Using Average filter")
         avg_filter = th.nn.AvgPool2d(kernel_size=3, stride=1, padding=1)
-        # avg_filter2 = th.nn.AvgPool2d(kernel_size=5, stride=1, padding=1)
         input_semantics_clean = avg_filter(input_semantics)
     elif pool == "max":
         print("Using Max filter")
@@ -299,7 +290,6 @@ def calculate_activation_statistics(images, model, batch_size=128, dims=2048,
     pred = model(batch)[0]
     print('pred shape 1: ', pred.shape)
 
-    # If model output is not scalar, apply global spatial average pooling.
     # This happens if you choose a dimensionality not equal 2048.
     if pred.size(2) != 1 or pred.size(3) != 1:
         pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
@@ -310,6 +300,8 @@ def calculate_activation_statistics(images, model, batch_size=128, dims=2048,
     mu = np.mean(act, axis=0)
     sigma = np.cov(act, rowvar=False)
     return mu, sigma
+
+
 def get_edges(t):
     edge = th.ByteTensor(t.size()).zero_()
     edge[:, :, :, 1:] = edge[:, :, :, 1:] | (t[:, :, :, 1:] != t[:, :, :, :-1])

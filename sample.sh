@@ -1,12 +1,12 @@
 #!/bin/bash -l
 
-#SBATCH -J sampling
+#SBATCH -J s_np_10k
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=5
 #SBATCH --time=72:00:00
 #SBATCH --mem=32GB
-#SBATCH --partition=partitions-gpu
-#SBATCH --mail-user=user@email.com
+#SBATCH --partition=your_partition  # Replace with your actual partition name
+#SBATCH --mail-user=your@email.com # Replace with your actual email
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
 #SBATCH --nodelist=ruby-0
@@ -16,7 +16,7 @@
 module load cuda
 
 # Activate the Conda environment
-source activate diff_go_n  # or conda activate diff if 'source' doesn't work
+source activate diff_go_n  # Replace with your actual environment name
 
 # Define log files for stdout and stderr
 output_log="output_infer.log"
@@ -24,7 +24,7 @@ error_log="error_infer.log"
 
 # Run your Python script and log stdout and stderr
 
-python image_sample_noise_exp.py  --data_dir "path/to/dataset_folder"\
+python image_sample.py --data_dir "path/to/dataset_folder" \
                                   --dataset_mode cityscapes \
                                   --attention_resolutions 32,16,8 \
                                   --diffusion_steps 1000 \
